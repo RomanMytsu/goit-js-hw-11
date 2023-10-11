@@ -53,7 +53,7 @@ async function handlerSubmit(e) {
   });
   lightbox = new SimpleLightbox('.gallery a', {
     captionsData: 'alt',
-    captionDelay: 300,
+    captionDelay: 250,
   });
 }
 
