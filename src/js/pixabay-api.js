@@ -14,5 +14,5 @@ export async function fetchCard(query, page) {
     page,
   });
   const resp = await axios.get(`${BASE_URL}?${params}`);
-    return resp.data;
+  return resp.data;
 }

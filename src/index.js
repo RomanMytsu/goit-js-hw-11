@@ -1,50 +1,79 @@
-import Notiflix, { Notify } from 'notiflix';
+import Notiflix from 'notiflix';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
-import { fetchCard } from './js/pixabay';
+import { fetchCard } from './js/pixabay-api';
 import { refs } from './js/refs';
 import { createMarkup } from './js/createMarkup';
 
-refs.searchForm.addEventListener('submit', onFormSubmit);
-refs.loadMore.addEventListener('click', onLoadMore);
-refs.loadMore.style.display = 'none';
+const { searchForm, gallery, button } = refs;
 
-const simplelightbox = new SimpleLightbox('.gallery a');
-
+let searchValue = '';
 let page = 1;
-let searchQuery = '';
-let scrollDistance = 0;
+let lightbox = {};
 
-async function onFormSubmit(e) {
+const options = {
+  root: null,
+  rootMargin: '100px',
+  threshold: 1.0,
+};
+
+const observer = new IntersectionObserver(handlerObserver, options);
+const target = document.querySelector('#target');
+
+searchForm.addEventListener('submit', handlerSubmit);
+
+async function handlerSubmit(e) {
   e.preventDefault();
-  refs.gallery.innerHTML = '';
-
+  searchValue = e.currentTarget.elements.searchQuery.value;
+  page = 1;
+  if (searchValue.trim() === '') {
+    Notiflix.Notify.info('Enter text');
+    return;
+  }
   try {
-    const formElement = e.currentTarget.elements;
-    searchQuery = formElement.searchQuery.value.trim();
-
-    if (!searchQuery.length) {
-      refs.loadMore.classList.add('visually-hidden');
-      refs.loadMore.style.display = 'none';
-      Notify.warning('Please fill out the search field!');
-      return;
-    }
-    page = 1;
-    const { hits, totalHits } = await fetchCard(searchQuery, page);
-
-    if (hits.length === 0) {
-      refs.gallery.innerHTML = '';
-      refs.loadMore.classList.add('visually-hidden');
-      refs.loadMore.style.display = 'none';
-      Notify.failure(
+    const cardData = await fetchCard(searchValue, page);
+    if (cardData.totalHits === 0) {
+      Notiflix.Notify.failure(
         'Sorry, there are no images matching your search query. Please try again.'
       );
+      gallery.innerHTML = '';
       return;
     }
+    gallery.innerHTML = createMarkup(cardData.hits);
+    Notiflix.Notify.info(`Hooray! We found ${cardData.totalHits} images.`);
+    observer.observe(target);
+  } catch {
+    Notiflix.Notify.failure(
+      'Sorry, there are no images matching your search query. Please try again.'
+    );
+  }
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
+  lightbox = new SimpleLightbox('.gallery a', {
+    captionsData: 'alt',
+    captionDelay: 300,
+  });
+}
 
-    createMarkup(hits);
-    Notify.success(`Hooray! We found ${totalHits} images`);
-      simplelightbox.refresh();
-      
-  } catch {}
+async function handlerObserver(entries, observer) {
+  entries.forEach(async entry => {
+    if (!entry.isIntersecting) {
+      return;
+    }
+    page += 1;
+    try {
+      const cardData = await fetchCard(searchValue, page);
+      gallery.insertAdjacentHTML('beforeend', createMarkup(cardData.hits));
+      if (page * cardData.hits.length >= cardData.totalHits) {
+        observer.unobserve(target);
+      }
+    } catch {
+      Notiflix.Notify.failure(
+        'Sorry, there are no images matching your search query. Please try again.'
+      );
+    }
+    lightbox.refresh();
+  });
 }
